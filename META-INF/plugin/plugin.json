@@ -1,0 +1,13 @@
+{
+    "bundleName": "com.hitachi.hci.full.text.match.pattern.stage",
+    "description": "Reads full text stream and match patterns",
+    "displayName": "Full Text Match Pattern Stage",
+    "plugins": [
+        {
+            "pluginImplementation": "com.hitachi.hci.full.text.match.pattern.stage.FullTextMatchPatternStage",
+            "pluginName": "com.hitachi.hci.full.text.match.pattern.stage.FullTextMatchPatternStage",
+            "pluginType": "com.hds.ensemble.sdk.stage.StagePlugin"
+        }
+    ],
+    "version": "0.9.0"
+}
