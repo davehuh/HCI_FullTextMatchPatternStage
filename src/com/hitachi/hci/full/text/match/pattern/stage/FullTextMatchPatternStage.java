@@ -3,6 +3,7 @@ package com.hitachi.hci.full.text.match.pattern.stage;
 import com.hds.ensemble.sdk.config.Config;
 import com.hds.ensemble.sdk.config.ConfigProperty;
 import com.hds.ensemble.sdk.config.ConfigPropertyGroup;
+import com.hds.ensemble.sdk.config.ConfigPropertyGroup.Builder;
 import com.hds.ensemble.sdk.config.PropertyGroupType;
 import com.hds.ensemble.sdk.exception.ConfigurationException;
 import com.hds.ensemble.sdk.exception.PluginOperationFailedException;
@@ -51,6 +52,11 @@ public class FullTextMatchPatternStage implements StagePlugin
 
 	private final PluginConfig config;
 	private final PluginCallback callback;
+	
+	//TODO test
+	private String label_input;
+	private String pattern_input;
+	private Pattern pattern;
 
 	static final String SPACE_CONSTANT = "%SPACE";
 	
@@ -64,16 +70,33 @@ public class FullTextMatchPatternStage implements StagePlugin
 			.setUserVisibleName("Stream")
 			.setUserVisibleDescription("Name of the stream to read text from (e.g. HCI_text)");
 	
-
+	//TODO test
+	public static final ConfigProperty.Builder PROPERTY_LABEL = new ConfigProperty.Builder()
+			.setName("label")
+			.setValue("")
+			.setRequired(true)
+			.setUserVisibleName("Label")
+			.setUserVisibleDescription("Category");
+	
+	public static final ConfigProperty.Builder PROPERTY_PATTERN = new ConfigProperty.Builder()
+			.setName("pattern")
+			.setValue("")
+			.setRequired(true)
+			.setUserVisibleName("Pattern (regex)")
+			.setUserVisibleDescription("Pattern to be matched in text");
 
 	
 	private static List<ConfigProperty.Builder> inputStreamGroupProperties = new ArrayList<>();
 	private static List<ConfigProperty.Builder> pattern_group = new ArrayList<>();
+	private static List<ConfigProperty.Builder> pattern_label_single_value = new ArrayList<>();
 	
 	public static final String INPUT_STREAM_GROUP_NAME = "Input text stream";
 	
 	public static final String PATTERN_MATCH_GROUP_NAME = "Pattern to match (regex)";
 	public static final String PATTERN_MATCH_GROUP_DESCRIPTION = "Boolean label if match and Pattern (regex)";
+	
+	public static final String PATTERN_LABEL_GROUP_NAME = "Pattern and Label";
+	public static final String PATTERN_LABEL_GROUP_DESCRIPTION = "Single entry for label and pattern";
 	
 	private static List<String> groupLabels = new ArrayList<>();
 	
@@ -89,6 +112,14 @@ public class FullTextMatchPatternStage implements StagePlugin
 		inputStreamGroupProperties.add(PROPERTY_INPUT_STREAM_NAME);
 	}
 	
+	//TODO
+	static
+	{
+		pattern_label_single_value.add(PROPERTY_LABEL);
+		pattern_label_single_value.add(PROPERTY_PATTERN);
+	}
+	
+	
 	
 	public static final ConfigPropertyGroup.Builder PROPERTY_GROUP_INPUT_STREAM = new ConfigPropertyGroup.Builder(INPUT_STREAM_GROUP_NAME,
 			null)
@@ -99,12 +130,17 @@ public class FullTextMatchPatternStage implements StagePlugin
 			.setType(PropertyGroupType.KEY_VALUE_TABLE)
 			.setOptions(groupLabels)
 			.setConfigProperties(pattern_group);
+	public static final ConfigPropertyGroup.Builder PROPERTY_GROUP_PATTERN_LABEL_SINGLE_ENTRY = new ConfigPropertyGroup.Builder(PATTERN_LABEL_GROUP_NAME, PATTERN_MATCH_GROUP_DESCRIPTION)
+			.setType(PropertyGroupType.SINGLE_VALUE_TABLE)
+			.setConfigProperties(pattern_label_single_value);
 	
+	//TODO test
 	// Default config
 	// This default configuration will be returned to callers of getDefaultConfig().
 	public static final PluginConfig DEFAULT_CONFIG = PluginConfig.builder()
 			.addGroup(PROPERTY_GROUP_INPUT_STREAM)
-			.addGroup(PROPERTY_GROUP_PATTERN_LABEL)
+//			.addGroup(PROPERTY_GROUP_PATTERN_LABEL)
+			.addGroup(PROPERTY_GROUP_PATTERN_LABEL_SINGLE_ENTRY)
 			.build();
 			
 	
@@ -123,31 +159,44 @@ public class FullTextMatchPatternStage implements StagePlugin
 		this.callback = callback;
 		this.validateConfig(this.config);
 		
-		//Label & Pattern Properties
-		ConfigPropertyGroup labelPatternGroup = config.getGroup(PATTERN_MATCH_GROUP_NAME);
-		List<ConfigProperty> labelPatternEntries = labelPatternGroup.getProperties();
-		labelPatternMap = new HashMap<String, Pattern>();
+		FullTextMatchPatternStage.inputStreamName = this.config.getPropertyValueOrDefault(PROPERTY_INPUT_STREAM_NAME.getName(), "HCI_text");
+		
+		//TODO test
+		//Pre-compile Label and Pattern
+		this.label_input = this.config.getPropertyValue(PROPERTY_LABEL.getName());
+		this.pattern_input = this.config.getPropertyValue(PROPERTY_PATTERN.getName());
 		
 		try {
-			//to ensure key is unique
-			int i = 0;
-			// Pre-compile patterns for efficiency
-			for (ConfigProperty property : labelPatternEntries)
-			{
-				Pattern pattern = Pattern.compile(property.getValue());
-				String fieldNamelabel = property.getName() + "_" + i;
-				if (fieldNamelabel != null)
-				{
-					fieldNamelabel = fieldNamelabel.replaceAll(SPACE_CONSTANT, " ");
-				}
-				labelPatternMap.put(fieldNamelabel, pattern);
-				i++;
-			}
+			this.pattern = Pattern.compile(pattern_input);
 		} catch (PatternSyntaxException ex) {
 			throw new ConfigurationException("Invalid regex syntax in pattern configuration", ex);
 		}
 		
-		FullTextMatchPatternStage.inputStreamName = this.config.getPropertyValueOrDefault(PROPERTY_INPUT_STREAM_NAME.getName(), "HCI_text");
+		//Label & Pattern Properties
+//		ConfigPropertyGroup labelPatternGroup = config.getGroup(PATTERN_MATCH_GROUP_NAME);
+//		List<ConfigProperty> labelPatternEntries = labelPatternGroup.getProperties();
+//		labelPatternMap = new HashMap<String, Pattern>();
+//		
+//		try {
+//			//to ensure key is unique
+//			int i = 0;
+//			// Pre-compile patterns for efficiency
+//			for (ConfigProperty property : labelPatternEntries)
+//			{
+//				Pattern pattern = Pattern.compile(property.getValue());
+//				String fieldNamelabel = property.getName() + "_" + i;
+//				if (fieldNamelabel != null)
+//				{
+//					fieldNamelabel = fieldNamelabel.replaceAll(SPACE_CONSTANT, " ");
+//				}
+//				labelPatternMap.put(fieldNamelabel, pattern);
+//				i++;
+//			}
+//		} catch (PatternSyntaxException ex) {
+//			throw new ConfigurationException("Invalid regex syntax in pattern configuration", ex);
+//		}
+		
+
 	}
 	
 
@@ -197,45 +246,56 @@ public class FullTextMatchPatternStage implements StagePlugin
 					"Missing configuration for group \"" + INPUT_STREAM_GROUP_NAME + "\"");
 		}
 		
-		// Label & Pattern Properties
-		ConfigPropertyGroup labelPatternGroup = config.getGroup(PATTERN_MATCH_GROUP_NAME);
-		if (labelPatternGroup == null)
+		//TODO
+		// InputStream Property
+		ConfigPropertyGroup patternLabelGroup = config.getGroup(PATTERN_LABEL_GROUP_NAME);
+		if (patternLabelGroup == null)
 		{
 			throw new ConfigurationException(
-					"Missing configuration for group \"" + PATTERN_MATCH_GROUP_NAME + "\"");
+					"Missing configuration for group \"" + PATTERN_LABEL_GROUP_NAME + "\"");
 		}
 		
-		List<ConfigProperty> labelPatternEntries = labelPatternGroup.getProperties();
-		if (labelPatternEntries == null || labelPatternEntries.isEmpty())
-		{
-			throw new ConfigurationException(
-					"Missing entries (label and/or pattern) on required field \"" + PATTERN_MATCH_GROUP_NAME + "\"");
-		}
 		
-		for (ConfigProperty property : labelPatternEntries)
-		{
-			//fieldname label entry
-			if (property.getName() == null || property.getName().isEmpty())
-			{
-				throw new ConfigurationException(
-						"Missing label entry (required field");
-			}
-			
-			//pattern entry
-			if (property.getValue() == null || property.getValue().isEmpty())
-			{
-				throw new ConfigurationException(
-						"Missing pattern entry (required field");
-			}
-			
-			try {
-				Pattern.compile(property.getValue());
-			} catch (PatternSyntaxException ex) {
-				throw new ConfigurationException("Invalid syntax in pattern configuration ", ex);
-			}
-			
-		}
-		
+//		//TODO
+//		// Label & Pattern Properties
+//		ConfigPropertyGroup labelPatternGroup = config.getGroup(PATTERN_MATCH_GROUP_NAME);
+//		if (labelPatternGroup == null)
+//		{
+//			throw new ConfigurationException(
+//					"Missing configuration for group \"" + PATTERN_MATCH_GROUP_NAME + "\"");
+//		}
+//		
+//		List<ConfigProperty> labelPatternEntries = labelPatternGroup.getProperties();
+//		if (labelPatternEntries == null || labelPatternEntries.isEmpty())
+//		{
+//			throw new ConfigurationException(
+//					"Missing entries (label and/or pattern) on required field \"" + PATTERN_MATCH_GROUP_NAME + "\"");
+//		}
+//		
+//		for (ConfigProperty property : labelPatternEntries)
+//		{
+//			//fieldname label entry
+//			if (property.getName() == null || property.getName().isEmpty())
+//			{
+//				throw new ConfigurationException(
+//						"Missing label entry (required field");
+//			}
+//			
+//			//pattern entry
+//			if (property.getValue() == null || property.getValue().isEmpty())
+//			{
+//				throw new ConfigurationException(
+//						"Missing pattern entry (required field");
+//			}
+//			
+//			try {
+//				Pattern.compile(property.getValue());
+//			} catch (PatternSyntaxException ex) {
+//				throw new ConfigurationException("Invalid syntax in pattern configuration ", ex);
+//			}
+//			
+//		}
+//		
 	}
 
 	@Override
@@ -257,7 +317,9 @@ public class FullTextMatchPatternStage implements StagePlugin
 		DocumentBuilder docBuilder = this.callback.documentBuilder().copy(inputDocument);
 		
 		InputStream inputStream = this.callback.openNamedStream(inputDocument, inputStreamName);
-		
+
+		//TODO
+		String label = label_input;
 					
 		try (BufferedReader br = new BufferedReader(new InputStreamReader(inputStream)))
 		{
@@ -265,23 +327,37 @@ public class FullTextMatchPatternStage implements StagePlugin
 			String line;
 			while ((line = br.readLine()) != null)
 			{
-				for (Map.Entry<String, Pattern> entry : labelPatternMap.entrySet())
-				{
-					Pattern pattern = entry.getValue();
-					String label = entry.getKey();
+
+				//TODO
+				Matcher m = pattern.matcher(line);
+				if (m.find()) {
+					matched = true;
 					
-					Matcher m = pattern.matcher(line);
-					if (m.find()) {
-						matched = true;
-						
-						String fieldName = "$matched_" + label;
-						
-						docBuilder.setMetadata(fieldName
-								, BooleanDocumentFieldValue.builder().setBoolean(matched).build());
-						
-						break;
-					}
+					String fieldName = "$matched_" + label;
+					
+					docBuilder.setMetadata(fieldName
+							, BooleanDocumentFieldValue.builder().setBoolean(matched).build());
+					
+					break;
 				}
+				//TODO
+//				for (Map.Entry<String, Pattern> entry : labelPatternMap.entrySet())
+//				{
+//					Pattern pattern = entry.getValue();
+//					String label = entry.getKey();
+//					
+//					Matcher m = pattern.matcher(line);
+//					if (m.find()) {
+//						matched = true;
+//						
+//						String fieldName = "$matched_" + label;
+//						
+//						docBuilder.setMetadata(fieldName
+//								, BooleanDocumentFieldValue.builder().setBoolean(matched).build());
+//						
+//						break;
+//					}
+//				}
 
 			}
 			
